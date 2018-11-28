@@ -12,10 +12,10 @@
 % Load the data Semeval 2017
 
 % Define the directory
-%trainingDir = "/Users/mjscheid/Desktop/590_Project/datasets/SemevalData_Part/Training/";
-%testingDir = "/Users/mjscheid/Desktop/590_Project/datasets/SemevalData_Part/Testing/";
-trainingDir = "/Users/mjscheid/Desktop/590_Project/datasets/SemevalData_Full/Training/";
-testingDir = "/Users/mjscheid/Desktop/590_Project/datasets/SemevalData_Full/Testing/";
+trainingDir = "/Users/mjscheid/Desktop/590_Project/datasets/SemevalData_Part/Training/";
+testingDir = "/Users/mjscheid/Desktop/590_Project/datasets/SemevalData_Part/Testing/";
+%trainingDir = "/Users/mjscheid/Desktop/590_Project/datasets/SemevalData_Full/Training/";
+%testingDir = "/Users/mjscheid/Desktop/590_Project/datasets/SemevalData_Full/Testing/";
 
 % Define the file names
 trainingDataInputFileName = "SemEval2017-task4-dev.subtask-A.english.INPUT.txt";
@@ -40,9 +40,21 @@ testingOutputFile = testingDir + testingDataOutputFileName;
 % Build a table from the data from the text file
 trainingInput = readtable(trainingInputFile,'TextType','string');
 trainingOutput = readtable(trainingOutputFile,'TextType','string');
+%dataTesting = readtable(testingFile,'TextType','string');
+%dataTesting = readtable(testingFile,'TextType','string');
 testingInput = readtable(testingInputFile,'TextType','string');
 testingOutput = readtable(testingOutputFile,'TextType','string');
 
+disp("testingInput");
+disp(size(testingInput));
+disp(testingInput(1:5,:));
+disp("testingOutput");
+disp(size(testingOutput));
+disp(testingOutput(1:5,:));
+dataTesting = testingInput;
+dataTesting.Var2 = testingOutput.Var2;
+disp("dataTesting");
+disp(dataTesting(1:5,:));
 
 
 % For some reason the training output table has a column of blank strings
@@ -54,11 +66,11 @@ defult_vat_names = ["Var1","Var2","Var3"];
 new_var_names = ["id","rating","tweet"];
 for i = 1:3
     trainingInput.Properties.VariableNames{char(defult_vat_names(1,i))} = char(new_var_names(1,i));
-    testingInput.Properties.VariableNames{char(defult_vat_names(1,i))} = char(new_var_names(1,i));
+    dataTesting.Properties.VariableNames{char(defult_vat_names(1,i))} = char(new_var_names(1,i));
     if i < 3
        trainingOutput.Properties.VariableNames{char(defult_vat_names(1,i))} = char(new_var_names(1,i));
        
-       testingOutput.Properties.VariableNames{char(defult_vat_names(1,i))} = char(new_var_names(1,i));
+       %testingOutput.Properties.VariableNames{char(defult_vat_names(1,i))} = char(new_var_names(1,i));
     end
 end
 
@@ -135,6 +147,12 @@ disp(size(dataTrain));
 disp("dataValidation");
 disp(size(dataValidation));
 
+disp("before anything changes");
+disp("input size");
+disp(size(dataTesting.tweet));
+disp("output size");
+disp(size(dataTesting.rating));
+
 % No longer using this 
 % Input: the body if the tweet 
 % inputTrain = dataTrain.tweet;
@@ -197,7 +215,12 @@ disp(dataValidation(1:7,3));
 % See https://www.mathworks.com/help/textanalytics/ref/tokenizeddocument.html
 dataTrain.tokenizedTweets = preprocessTweets(dataTrain.tweet);
 dataValidation.tokenizedTweets = preprocessTweets(dataValidation.tweet);
-testingInput.tokenizedTweets = preprocessTweets(testingInput.tweet);
+dataTesting.tokenizedTweets = preprocessTweets(dataTesting.tweet);
+disp("after tokenized");
+disp("input size");
+disp(size(dataTesting.tweet));
+disp("output size");
+disp(size(dataTesting.rating));
 
 % Print all the training and val tweets
 %{
@@ -215,51 +238,81 @@ disp(dataTrain(1:5,:));
 
 dataTrain.rating = categorical(dataTrain.rating);
 dataValidation.rating = categorical(dataValidation.rating);
-testingOutput.rating = categorical(testingOutput.rating);
+dataTesting.rating = categorical(dataTesting.rating);
+
+disp("after categorical");
+disp("input size");
+disp(size(dataTesting.tweet));
+disp("output size");
+disp(size(dataTesting.rating));
+
+
 
 
 % Get the word embedding using pretrained GloVe not word2vec to save time
-%wordEmbedding = downloadReadWordEmbedding(100);
+wordEmbedding = downloadReadWordEmbedding(100);
 
 % Remove empty tweets: we must also remove 
 % These two lines are from the demo  
 % but look at https://www.mathworks.com/help/textanalytics/ref/tokenizeddocument.removeemptydocuments.html
-%[~, idx] = removeEmptyDocuments(dataTrain.tweet);
-%data(idx,:) = [];
+[~, idx] = removeEmptyDocuments(dataTrain.tokenizedTweets);
+dataTrain(idx,:) = [];
+%dataValidation
+[~, idx] = removeEmptyDocuments(dataValidation.tokenizedTweets);
+dataValidation(idx,:) = [];
+
+%dataTesting
+[~, idx] = removeEmptyDocuments(dataTesting.tokenizedTweets);
+dataTesting(idx,:) = [];
+
+
+
+disp("after remove");
+disp("input size");
+disp(size(dataTesting.tweet));
+disp("output size");
+disp(size(dataTesting.rating));
+
+
 
 % Use the word embedding to convert the tokenized tweets into vectors
 
 dataTrain.wordVec = prepData(wordEmbedding,dataTrain.tokenizedTweets);
 dataValidation.wordVec = prepData(wordEmbedding,dataValidation.tokenizedTweets);
-testingInput.wordVec = prepData(wordEmbedding,testingInput.tokenizedTweets);
+dataTesting.wordVec = prepData(wordEmbedding,dataTesting.tokenizedTweets);
+
+disp("word vect input size");
+disp("input size dataTesting.wordVec");
+disp(size(dataTesting.wordVec));
+
 
 
 %build LSTM
 inputSize = wordEmbedding.Dimension;
 outputSize = 180;
-numClasses = numel(3);
+numClasses = 3;
 
 layers = [ sequenceInputLayer(inputSize)
     lstmLayer(outputSize,'OutputMode','last')
     fullyConnectedLayer(numClasses)
     softmaxLayer
-    classificationLayer ];
+    classificationLayer('Name','Pos_Neg_Neu_Classification') ];
 
-options = trainingOptions('adam',...
+%https://www.mathworks.com/matlabcentral/answers/397588-how-is-it-possible-to-use-a-validation-set-with-a-lstm
+%Do you have R2018b? ValidationData is supported for sequence networks in R2018b.
+%'ValidationData',{dataValidation.wordVec,dataValidation.rating}, ...
+options = trainingOptions('sgdm',...
     'InitialLearnRate',0.05,...
     'Plots','training-progress',...
-    'ValidationData',{XValidation,YValidation}, ...
     'MaxEpochs',10,...
-    'GradientThreshold',1,...
-    'ExecutionEnvironment','auto',...
     'Verbose',0);
 
 doTraining = 1;
 if doTraining
-    net = trainNetwork(dataTrain.wordVec,dataTrain.ranking,layers,options);
-    save LSTMModel.mat net
+    net = trainNetwork(dataTrain.wordVec,dataTrain.rating,layers,options);
+    save LSTMModel.mat net;
 else 
-    load LSTMModel.mat net      
+    load LSTMModel.mat net;     
 end
 
 %%Save the trained network!!!!!!!!!!!!!!!!!
@@ -271,10 +324,18 @@ to load
 load filename
 %}
 
-testingInput.C
+
 % Test on the test dataset
-[predictedOutput,~] = classify(net,testingInput.wordVec);
-accuracy = sum(predictedOutput == testingOutput.rating)/numel(predictedOutput);
+[predictedOutput,~] = classify(net,dataTesting.wordVec);
+
+disp("output size: predictedOutput");
+disp(size(predictedOutput));
+disp("output size: dataTesting.rating");
+disp(size(dataTesting.rating));
+
+accuracy = sum(predictedOutput == dataTesting.rating)/numel(predictedOutput);
+disp("accuracy");
+disp(accuracy);
 
 disp("end");
 return;
